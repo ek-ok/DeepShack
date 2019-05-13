@@ -1,36 +1,27 @@
 import json
-import random
+import logging
+import os
 import tempfile
 
-import numpy as np
 import boto3
 import cv2
+import numpy as np
 from tensorflow.python.keras.models import load_model
 
-
 S3_BUCKET = 'deepshack'
-MSCNN_MODEL_PATH = 'model/shackcam_final.h5'
-FC_MODEL_PATH = 'model/shackcam_fc_final.h5'
+MODEL_PATH = 'model/vgg16_shackcam.h5'
 MASK_PATH = 'train/data/shackcam/line_mask.png'
+TOPIC_ARN = 'arn:aws:sns:us-east-1:245636212397:triggerSMS'
 
-
-def predict_handler(event, context):
-    s3_message = event['Records'][0]['s3']
-
-    message = {'prediction': random.randint(0, 10),
-               'filename': s3_message['object']['key']}
-
-    sns = boto3.client('sns')
-    response = sns.publish(
-        TopicArn='arn:aws:sns:us-east-1:245636212397:dlresult',
-        Message=json.dumps({'default': json.dumps(message)}),
-        MessageStructure='json'
-    )
-
-    return {'statusCode': 200, 'body': json.dumps(message)}
+logging.getLogger().setLevel(logging.INFO)
 
 
 def load_s3_object(key, func, **kwargs):
+    """
+    Loads a S3 object as byte string, creates a temp file, and then opens it
+    by applying the provided function and kwargs.
+    """
+    logging.info("Loading " + key)
     # Load S3 object as byte string
     s3 = boto3.client('s3')
     obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
@@ -44,47 +35,71 @@ def load_s3_object(key, func, **kwargs):
     return data
 
 
-def transform_image(img, new_shape):
-    """Crop, resize, mean normalize, and change from 3D to 4D"""
-    img = img[0:720, 0:720]
-    img = cv2.resize(img, (new_shape, new_shape)) / 255
-    img = np.expand_dims(img, axis=0)  # 3D to 4D
-    return img
+def load_masked_image(filename, new_shape):
+    """Load an image and apply mask"""
+    # Load image
+    img = load_s3_object(filename, cv2.imread)
+    img = cv2.resize(img, new_shape) / 255
 
-
-def mask_image(img):
-    img = img[0, :, :, 0].copy()  # 4D to 2D
-    new_shape = img.shape[0:2]
-
+    # Load mask
     mask = load_s3_object(MASK_PATH, cv2.imread, flags=0)
     mask = cv2.resize(mask, new_shape) // 255
     mask = (mask == 0)
+
+    # Apply mask
     img[mask] = 0
 
-    img = np.expand_dims(img, axis=0)  # (40, 40) to (1, 40, 40)
-    img = np.expand_dims(img, axis=-1)  # (1, 40, 40) to (1, 40, 40, 1)
-
+    # Change shape from (120, 120, 3) to (1, 120, 120, 3)
+    img = np.expand_dims(img, axis=0)
     return img
 
 
 def predict(filename):
-    img = load_s3_object(filename, cv2.imread)
-    gaussian = predict_mscnn(img)
-    masked = mask_image(gaussian)
-    count = predict_fc(masked)
-    return int(round(count))
+    """Opens an image file and predicts line count"""
+    logging.info("Predict started")
+    model = load_s3_object(MODEL_PATH, load_model)
+    new_shape = model.input_shape[1:3]  # (120, 120) for example
+    masked_image = load_masked_image(filename, new_shape)
+
+    pred = int(round(model.predict(masked_image)[0][0]))
+    logging.info("Predict ended")
+    return pred
 
 
-def predict_mscnn(img):
-    model = load_s3_object(MSCNN_MODEL_PATH, load_model)
-    new_shape = model.input_shape[1]
+def publish_message(message, topic_arn):
+    """Publishes a message to SNS topic"""
+    logging.info("Publish message started")
+    sns = boto3.client('sns')
+    response = sns.publish(
+        TopicArn=topic_arn,
+        Message=json.dumps({'default': json.dumps(message)}),
+        MessageStructure='json'
+    )
+    logging.info(str(response))
 
-    img_4d = transform_image(img, new_shape)
-    pred_4d = model.predict(img_4d)
-    return pred_4d
+
+def run():
+    """
+    Main function that loads an image and model, predicts line count, and then
+    submits a message to SNS triggerSMS topic
+    """
+    # Reads config from environment variable
+    filename = os.getenv('FILENAME')
+    phone_number = os.getenv('PHONE_NUMBER')
+
+    # Predict
+    prediction = predict(filename)
+    logging.info("Predict value is " + str(prediction))
+
+    # Publishes a message
+    body = ("There are {} people in line right now. "
+            "Get the Double Shack!!").format(str(prediction))
+
+    message = {'filename': filename,
+               'phone_number': phone_number,
+               'body': body}
+    publish_message(message, TOPIC_ARN)
 
 
-def predict_fc(img):
-    model = load_s3_object(FC_MODEL_PATH, load_model)
-    pred = model.predict(img)
-    return pred[0][0]
+if __name__ == '__main__':
+    run()

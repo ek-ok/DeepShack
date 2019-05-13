@@ -1,4 +1,4 @@
-# predict_trigger
+# Predict Trigger Service
 
 ## DESCRIPTION
 This function reads messages published on the **triggerPredict** SNS topic and passes the <u><i>image_id</i></u> and <u><i>phone</i></u> number to the task **predict_task** contained in the ECS cluster named **cluster2**

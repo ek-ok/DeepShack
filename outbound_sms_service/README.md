@@ -1,4 +1,4 @@
-# NAME OF THE FUNCTION
+# Otbound SMS Service
 
 ## DESCRIPTION
 
@@ -37,8 +37,8 @@ This microservice passes the following parameters to Twilio via a POST request:
 
 ```
 {
-    "To": to_number, 
-    "From": from_number, 
+    "To": to_number,
+    "From": from_number,
     "Body": body
 }
 ```

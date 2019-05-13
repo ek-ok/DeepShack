@@ -24,7 +24,7 @@ So to ease the decision making process on whether to visit Shake Shack at any gi
 Using SMS, a user will send a text message to the DeepShack microservice which will then notify the user with its best estimate of number of people waiting in line.
 
 <p align="center">
-  <img src="images/Demo.gif" width="600"/>
+  <img src="images/Demo.gif"/>
 </p>
 
 ## Microservice Architecture

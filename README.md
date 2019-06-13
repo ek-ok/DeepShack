@@ -11,7 +11,7 @@
 Shake Shack is lunchtime (and dinnertime) favorite for people in Manhattan.  The original location was opened in July 2004 in Madison Square Park.  Its popularity is such that in the summer the wait in line for service can stretch to over an hour, especially on weekends when the weather is pleasant. A webcam on the restaurant's web page shows the current line in real time in order to inform customers of the length of the line.
 
 <p align="center">
-  <img src="images/DeepShackTeam.jpg" width="600"/>
+  <img src="images/shakeshack-1500848940.jpg" width="600"/>
 </p>
 
 <p align="center">The DeepShack Team waves to the ShackCam at Madison Square Park!<p align="center">
